@@ -13,6 +13,9 @@ function writeChunk(type: string, data: Buffer): Buffer {
 }
 
 export function rgbaToPng(rgba: Buffer, width: number, height: number): Buffer {
+  if (width <= 0 || height <= 0) throw new Error(`Invalid PNG dimensions: ${width}x${height}`);
+  const expected = width * height * 4;
+  if (rgba.length < expected) throw new Error(`Buffer too small: got ${rgba.length}, need ${expected}`);
   const stride = width * 4;
   const filtered = Buffer.alloc(height * (1 + stride));
   for (let y = 0; y < height; y++) {

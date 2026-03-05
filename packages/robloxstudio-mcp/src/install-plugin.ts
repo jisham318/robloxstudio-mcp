@@ -1,4 +1,4 @@
-import { createWriteStream, existsSync, mkdirSync } from 'fs';
+import { createWriteStream, existsSync, mkdirSync, unlinkSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { get } from 'https';
@@ -6,6 +6,7 @@ import { IncomingMessage } from 'http';
 
 const REPO = 'boshyxd/robloxstudio-mcp';
 const ASSET_NAME = 'MCPPlugin.rbxmx';
+const TIMEOUT_MS = 30_000;
 
 function getPluginsFolder(): string {
   if (process.platform === 'win32') {
@@ -16,7 +17,9 @@ function getPluginsFolder(): string {
 
 function httpsGet(url: string): Promise<IncomingMessage> {
   return new Promise((resolve, reject) => {
-    get(url, { headers: { 'User-Agent': 'robloxstudio-mcp' } }, resolve).on('error', reject);
+    const req = get(url, { headers: { 'User-Agent': 'robloxstudio-mcp' } }, resolve);
+    req.on('error', reject);
+    req.setTimeout(TIMEOUT_MS, () => { req.destroy(new Error(`Request timed out after ${TIMEOUT_MS}ms`)); });
   });
 }
 
@@ -35,9 +38,15 @@ async function download(url: string, dest: string): Promise<void> {
 
   return new Promise((resolve, reject) => {
     const file = createWriteStream(dest);
+    const cleanup = (err: Error) => {
+      file.close();
+      try { unlinkSync(dest); } catch { /* already gone */ }
+      reject(err);
+    };
     res.pipe(file);
     file.on('finish', () => { file.close(); resolve(); });
-    file.on('error', reject);
+    file.on('error', cleanup);
+    res.on('error', cleanup);
   });
 }
 

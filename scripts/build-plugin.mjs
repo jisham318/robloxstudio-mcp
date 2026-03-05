@@ -170,7 +170,9 @@ const includeCount = countModules(includeDir);
 const rbxtsCount = countModules(nodeModulesRbxtsDir);
 console.log(`Built studio-plugin/MCPPlugin.rbxmx (${moduleCount} modules${includeCount > 0 ? `, ${includeCount} runtime includes` : ''}${rbxtsCount > 0 ? `, ${rbxtsCount} @rbxts packages` : ''})`);
 
-const pluginsDir = join(homedir(), 'AppData', 'Local', 'Roblox', 'Plugins');
+const pluginsDir = process.platform === 'win32'
+  ? join(process.env.LOCALAPPDATA || join(homedir(), 'AppData', 'Local'), 'Roblox', 'Plugins')
+  : join(homedir(), 'Documents', 'Roblox', 'Plugins');
 if (existsSync(pluginsDir)) {
   const installPath = join(pluginsDir, 'MCPPlugin.rbxmx');
   copyFileSync(outputPath, installPath);
