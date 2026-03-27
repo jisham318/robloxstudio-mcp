@@ -194,7 +194,7 @@ function pollForRequests(connIndex: number) {
 				el.troubleshootLabel.Visible = elapsed > 8;
 				if (elapsed > 3 && elapsed % 5 < conn.pollInterval) {
 					task.spawn(() => {
-						const discovered = discoverPort();
+						const discovered = discoverPort(getUsedPorts(connIndex));
 						if (discovered !== undefined && discovered !== conn.port) {
 							conn.port = discovered;
 							conn.serverUrl = `http://localhost:${discovered}`;
@@ -231,7 +231,7 @@ function pollForRequests(connIndex: number) {
 
 		if (conn.consecutiveFailures === 5 || conn.consecutiveFailures % 20 === 0) {
 			task.spawn(() => {
-				const discovered = discoverPort();
+				const discovered = discoverPort(getUsedPorts(connIndex));
 				if (discovered !== undefined && discovered !== conn.port) {
 					conn.port = discovered;
 					conn.serverUrl = `http://localhost:${discovered}`;
@@ -304,10 +304,33 @@ function pollForRequests(connIndex: number) {
 	}
 }
 
-function discoverPort(): number | undefined {
+function getUsedPorts(excludeIndex: number): Set<number> {
+	const ports = new Set<number>();
+	const conns = State.getConnections();
+	for (let i = 0; i < conns.size(); i++) {
+		if (i !== excludeIndex && conns[i].isActive) {
+			ports.add(conns[i].port);
+		}
+	}
+	return ports;
+}
+
+function checkPort(port: number): boolean {
+	const [ok, res] = pcall(() => {
+		return HttpService.RequestAsync({
+			Url: `http://localhost:${port}/status`,
+			Method: "GET",
+			Headers: { "Content-Type": "application/json" },
+		});
+	});
+	return ok && res.Success;
+}
+
+function discoverPort(excludePorts?: Set<number>): number | undefined {
 	let firstActivePort: number | undefined;
 	for (let offset = 0; offset < 5; offset++) {
 		const port = State.BASE_PORT + offset;
+		if (excludePorts && excludePorts.has(port)) continue;
 		const [success, result] = pcall(() => {
 			return HttpService.RequestAsync({
 				Url: `http://localhost:${port}/status`,
@@ -351,13 +374,16 @@ function activatePlugin(connIndex?: number) {
 	UI.updateTabDot(idx);
 
 	task.spawn(() => {
-		const discoveredPort = discoverPort();
-		if (discoveredPort !== undefined) {
-			conn.port = discoveredPort;
-			conn.serverUrl = `http://localhost:${discoveredPort}`;
-			UI.updateTabLabel(idx);
-			if (idx === State.getActiveTabIndex()) {
-				ui.urlInput.Text = conn.serverUrl;
+		if (!checkPort(conn.port)) {
+			const usedPorts = getUsedPorts(idx);
+			const discoveredPort = discoverPort(usedPorts);
+			if (discoveredPort !== undefined) {
+				conn.port = discoveredPort;
+				conn.serverUrl = `http://localhost:${discoveredPort}`;
+				UI.updateTabLabel(idx);
+				if (idx === State.getActiveTabIndex()) {
+					ui.urlInput.Text = conn.serverUrl;
+				}
 			}
 		}
 

@@ -32,8 +32,14 @@ function addConnection(port?: number): number | undefined {
 	if (connections.size() >= MAX_CONNECTIONS) {
 		return undefined;
 	}
-	const lastPort = connections[connections.size() - 1].port;
-	const conn = createConnection(port ?? lastPort + 1);
+	if (port === undefined) {
+		let maxPort = BASE_PORT - 1;
+		for (const conn of connections) {
+			if (conn.port > maxPort) maxPort = conn.port;
+		}
+		port = maxPort + 1;
+	}
+	const conn = createConnection(port);
 	connections.push(conn);
 	return connections.size() - 1;
 }
