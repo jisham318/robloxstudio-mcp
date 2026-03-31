@@ -1,7 +1,6 @@
 {
   "name": "MCPPlugin",
   "tree": {
-    "$className": "Script",
     "$path": "out/server",
     "modules": {
       "$path": "out/modules"
