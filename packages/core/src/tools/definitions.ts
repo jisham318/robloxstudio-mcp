@@ -1220,7 +1220,7 @@ part(0,2,0,2,1,1,"b")`,
   {
     name: 'search_assets',
     category: 'read',
-    description: 'Search the Creator Store (Roblox marketplace) for assets by type and keywords. Requires ROBLOX_OPEN_CLOUD_API_KEY env var.',
+    description: 'Search the Creator Store (Roblox marketplace) for assets by type and keywords. Requires ROBLOX_OPEN_CLOUD_API_KEY env var (no cookie auth for this endpoint).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -1253,7 +1253,7 @@ part(0,2,0,2,1,1,"b")`,
   {
     name: 'get_asset_details',
     category: 'read',
-    description: 'Get detailed marketplace metadata for a specific asset (creator info, votes, description, pricing). Requires ROBLOX_OPEN_CLOUD_API_KEY env var.',
+    description: 'Get detailed marketplace metadata for a specific asset. Uses ROBLOX_OPEN_CLOUD_API_KEY or falls back to ROBLOSECURITY cookie (own assets only).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -1268,7 +1268,7 @@ part(0,2,0,2,1,1,"b")`,
   {
     name: 'get_asset_thumbnail',
     category: 'read',
-    description: 'Get the thumbnail image for an asset as base64 PNG, suitable for vision LLMs. Requires ROBLOX_OPEN_CLOUD_API_KEY env var.',
+    description: 'Get the thumbnail image for an asset as base64 PNG, suitable for vision LLMs. Thumbnails API is public but asset validation uses ROBLOX_OPEN_CLOUD_API_KEY.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -1339,7 +1339,7 @@ part(0,2,0,2,1,1,"b")`,
   {
     name: 'upload_decal',
     category: 'write',
-    description: 'Upload an image file as a Decal asset to Roblox. Reads the file from disk, uploads via Open Cloud API, polls for completion, and returns the new asset ID. Requires ROBLOX_OPEN_CLOUD_API_KEY env var with asset:write scope. Also requires ROBLOX_CREATOR_USER_ID or ROBLOX_CREATOR_GROUP_ID env var (or pass userId/groupId as parameters).',
+    description: 'Upload an image file as a Decal asset to Roblox. Supports ROBLOSECURITY cookie auth (recommended, simpler) or ROBLOX_OPEN_CLOUD_API_KEY (needs asset:write scope + creator ID). Cookie auth is used automatically when ROBLOSECURITY is set.',
     inputSchema: {
       type: 'object',
       properties: {

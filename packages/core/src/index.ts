@@ -11,6 +11,7 @@ export {
 } from './tools/definitions.js';
 export type { ToolDefinition, ToolCategory } from './tools/definitions.js';
 export { OpenCloudClient } from './opencloud-client.js';
+export { RobloxCookieClient } from './roblox-cookie-client.js';
 export type {
   OpenCloudConfig,
   AssetSearchParams,

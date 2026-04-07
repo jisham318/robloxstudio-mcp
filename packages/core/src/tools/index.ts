@@ -2,6 +2,7 @@ import { StudioHttpClient } from './studio-client.js';
 import { BridgeService } from '../bridge-service.js';
 import { runBuildExecutor } from './build-executor.js';
 import { OpenCloudClient } from '../opencloud-client.js';
+import { RobloxCookieClient } from '../roblox-cookie-client.js';
 import { rgbaToPng } from '../png-encoder.js';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -31,11 +32,13 @@ export class RobloxStudioTools {
   private client: StudioHttpClient;
   private bridge: BridgeService;
   private openCloudClient: OpenCloudClient;
+  private cookieClient: RobloxCookieClient;
 
   constructor(bridge: BridgeService) {
     this.client = new StudioHttpClient(bridge);
     this.bridge = bridge;
     this.openCloudClient = new OpenCloudClient();
+    this.cookieClient = new RobloxCookieClient();
   }
 
 
@@ -1375,11 +1378,21 @@ export class RobloxStudioTools {
     if (!assetId) {
       throw new Error('Asset ID is required for get_asset_details');
     }
+
+    if (this.cookieClient.hasCookie() && !this.openCloudClient.hasApiKey()) {
+      const results = await this.cookieClient.getAssetDetails([assetId]);
+      const asset = results[0];
+      if (!asset) {
+        return { content: [{ type: 'text', text: JSON.stringify({ error: 'Asset not found or not owned by authenticated user' }) }] };
+      }
+      return { content: [{ type: 'text', text: JSON.stringify(asset) }] };
+    }
+
     if (!this.openCloudClient.hasApiKey()) {
       return {
         content: [{
           type: 'text',
-          text: JSON.stringify({ error: 'ROBLOX_OPEN_CLOUD_API_KEY environment variable is not set. Set it to use Creator Store asset tools.' })
+          text: JSON.stringify({ error: 'No auth configured. Set ROBLOSECURITY or ROBLOX_OPEN_CLOUD_API_KEY env var.' })
         }]
       };
     }
@@ -1466,9 +1479,38 @@ export class RobloxStudioTools {
     userId?: string,
     groupId?: string
   ) {
+    if (!fs.existsSync(filePath)) {
+      throw new Error(`File not found: ${filePath}`);
+    }
+
+    const fileContent = fs.readFileSync(filePath);
+    const fileName = path.basename(filePath);
+
+    if (this.cookieClient.hasCookie()) {
+      const result = await this.cookieClient.uploadDecal(
+        fileContent,
+        displayName,
+        description || ''
+      );
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            done: true,
+            response: {
+              assetId: String(result.assetId),
+              displayName,
+              assetType: 'Decal',
+              backingAssetId: String(result.backingAssetId),
+            },
+          })
+        }]
+      };
+    }
+
     if (!this.openCloudClient.hasApiKey()) {
       throw new Error(
-        'ROBLOX_OPEN_CLOUD_API_KEY environment variable is not set. Required for asset upload.'
+        'No auth configured for asset upload. Set ROBLOSECURITY env var (recommended) or ROBLOX_OPEN_CLOUD_API_KEY.'
       );
     }
 
@@ -1477,16 +1519,9 @@ export class RobloxStudioTools {
 
     if (!resolvedUserId && !resolvedGroupId) {
       throw new Error(
-        'Creator identity required. Set ROBLOX_CREATOR_USER_ID or ROBLOX_CREATOR_GROUP_ID environment variable, or pass userId/groupId as parameters.'
+        'Creator identity required for Open Cloud upload. Set ROBLOX_CREATOR_USER_ID or ROBLOX_CREATOR_GROUP_ID, or pass userId/groupId as parameters. Alternatively, set ROBLOSECURITY to use cookie auth instead.'
       );
     }
-
-    if (!fs.existsSync(filePath)) {
-      throw new Error(`File not found: ${filePath}`);
-    }
-
-    const fileContent = fs.readFileSync(filePath);
-    const fileName = path.basename(filePath);
 
     const creator: { userId?: string; groupId?: string } = {};
     if (resolvedGroupId) {
