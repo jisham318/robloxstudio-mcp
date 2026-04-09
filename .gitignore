@@ -21,6 +21,10 @@ dist/
 *.swp
 *.swo
 
+# Claude Code config (may contain credentials)
+.claude.json
+.claude/
+
 # Development files (keep local only)
 CLAUDE.md
 MCP_Server_Plan.md
