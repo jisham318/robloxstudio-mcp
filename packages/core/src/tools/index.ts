@@ -1563,14 +1563,9 @@ export class RobloxStudioTools {
 
     const fileContent = fs.readFileSync(filePath);
     const fileName = path.basename(filePath);
-    const cookieSupported = assetType === 'Decal' || assetType === 'Audio';
 
-    if (cookieSupported && this.cookieClient.hasCookie()) {
-      const upload = assetType === 'Decal'
-        ? this.cookieClient.uploadDecal(fileContent, displayName, description || '')
-        : this.cookieClient.uploadAudio(fileContent, displayName, description || '');
-
-      const result = await upload;
+    if (assetType === 'Decal' && this.cookieClient.hasCookie()) {
+      const result = await this.cookieClient.uploadDecal(fileContent, displayName, description || '');
       return {
         content: [{
           type: 'text',
@@ -1588,7 +1583,7 @@ export class RobloxStudioTools {
     }
 
     if (!this.openCloudClient.hasApiKey()) {
-      const cookieHint = cookieSupported
+      const cookieHint = assetType === 'Decal'
         ? ' Alternatively, set ROBLOSECURITY to use cookie auth.'
         : '';
       throw new Error(
