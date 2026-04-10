@@ -389,7 +389,7 @@ export class OpenCloudClient {
 
   private async pollOperation(
     operationPath: string,
-    maxAttempts = 15,
+    maxAttempts = 30,
     intervalMs = 2000
   ): Promise<AssetOperationResponse> {
     const operationId = operationPath.replace('operations/', '');
