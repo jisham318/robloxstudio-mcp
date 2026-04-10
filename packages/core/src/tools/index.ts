@@ -1549,6 +1549,88 @@ export class RobloxStudioTools {
     };
   }
 
+  async uploadAsset(
+    filePath: string,
+    assetType: string,
+    displayName: string,
+    description?: string,
+    userId?: string,
+    groupId?: string
+  ) {
+    if (!fs.existsSync(filePath)) {
+      throw new Error(`File not found: ${filePath}`);
+    }
+
+    const fileContent = fs.readFileSync(filePath);
+    const fileName = path.basename(filePath);
+    const cookieSupported = assetType === 'Decal' || assetType === 'Audio';
+
+    if (cookieSupported && this.cookieClient.hasCookie()) {
+      const upload = assetType === 'Decal'
+        ? this.cookieClient.uploadDecal(fileContent, displayName, description || '')
+        : this.cookieClient.uploadAudio(fileContent, displayName, description || '');
+
+      const result = await upload;
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            done: true,
+            response: {
+              assetId: String(result.assetId),
+              displayName,
+              assetType,
+              backingAssetId: String(result.backingAssetId),
+            },
+          })
+        }]
+      };
+    }
+
+    if (!this.openCloudClient.hasApiKey()) {
+      const cookieHint = cookieSupported
+        ? ' Alternatively, set ROBLOSECURITY to use cookie auth.'
+        : '';
+      throw new Error(
+        `No auth configured for ${assetType} upload. Set ROBLOX_OPEN_CLOUD_API_KEY (needs asset:write scope).${cookieHint}`
+      );
+    }
+
+    const resolvedGroupId = groupId || process.env.ROBLOX_CREATOR_GROUP_ID;
+    const resolvedUserId = userId || process.env.ROBLOX_CREATOR_USER_ID;
+
+    if (!resolvedUserId && !resolvedGroupId) {
+      throw new Error(
+        'Creator identity required for Open Cloud upload. Set ROBLOX_CREATOR_USER_ID or ROBLOX_CREATOR_GROUP_ID, or pass userId/groupId as parameters.'
+      );
+    }
+
+    const creator: { userId?: string; groupId?: string } = {};
+    if (resolvedGroupId) {
+      creator.groupId = resolvedGroupId;
+    } else {
+      creator.userId = resolvedUserId;
+    }
+
+    const result = await this.openCloudClient.createAsset(
+      {
+        assetType: assetType as 'Audio' | 'Decal' | 'Model' | 'Animation' | 'Video',
+        displayName,
+        description: description || '',
+        creationContext: { creator },
+      },
+      fileContent,
+      fileName
+    );
+
+    return {
+      content: [{
+        type: 'text',
+        text: JSON.stringify(result)
+      }]
+    };
+  }
+
   async simulateMouseInput(action: string, x: number, y: number, button?: string, scrollDirection?: string, target?: string) {
     if (!action) {
       throw new Error('action is required for simulate_mouse_input');

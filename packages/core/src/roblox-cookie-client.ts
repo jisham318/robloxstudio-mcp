@@ -42,13 +42,31 @@ export class RobloxCookieClient {
     name: string,
     description: string
   ): Promise<{ assetId: number; backingAssetId: number }> {
+    return this.uploadAssetByTypeId(fileContent, name, description, 13, 'Decal');
+  }
+
+  async uploadAudio(
+    fileContent: Buffer,
+    name: string,
+    description: string
+  ): Promise<{ assetId: number; backingAssetId: number }> {
+    return this.uploadAssetByTypeId(fileContent, name, description, 3, 'Audio');
+  }
+
+  private async uploadAssetByTypeId(
+    fileContent: Buffer,
+    name: string,
+    description: string,
+    assetTypeId: number,
+    assetLabel: string
+  ): Promise<{ assetId: number; backingAssetId: number }> {
     if (!this.cookie) {
       throw new Error('ROBLOSECURITY cookie is not set.');
     }
 
     const encodedName = encodeURIComponent(name);
     const encodedDesc = encodeURIComponent(description);
-    const url = `https://data.roblox.com/data/upload/json?assetTypeId=13&name=${encodedName}&description=${encodedDesc}`;
+    const url = `https://data.roblox.com/data/upload/json?assetTypeId=${assetTypeId}&name=${encodedName}&description=${encodedDesc}`;
 
     const response = await this.fetchWithCsrf(url, {
       method: 'POST',
@@ -62,7 +80,7 @@ export class RobloxCookieClient {
 
     if (!response.ok) {
       const body = await response.text();
-      throw new Error(`Decal upload failed (${response.status}): ${body}`);
+      throw new Error(`${assetLabel} upload failed (${response.status}): ${body}`);
     }
 
     const result = await response.json() as {
@@ -73,7 +91,7 @@ export class RobloxCookieClient {
     };
 
     if (!result.Success || !result.AssetId) {
-      throw new Error(`Decal upload failed: ${result.Message || 'Unknown error'}`);
+      throw new Error(`${assetLabel} upload failed: ${result.Message || 'Unknown error'}`);
     }
 
     return {

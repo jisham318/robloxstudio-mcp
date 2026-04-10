@@ -1368,6 +1368,42 @@ part(0,2,0,2,1,1,"b")`,
     }
   },
   {
+    name: 'upload_asset',
+    category: 'write',
+    description: 'Upload any supported asset type to Roblox: Audio (mp3/ogg/wav/flac), Decal (png/jpg/bmp/tga), Model (fbx/gltf/glb/rbxm/rbxmx), Animation (rbxm/rbxmx), or Video (mp4/mov). For Audio and Decal, supports ROBLOSECURITY cookie auth (recommended) or ROBLOX_OPEN_CLOUD_API_KEY. Other types require Open Cloud API key. Audio: max 7 min, 100 uploads/month (ID-verified). Video: max 5 min, requires 13+ ID-verified.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        filePath: {
+          type: 'string',
+          description: 'Absolute path to the file on disk'
+        },
+        assetType: {
+          type: 'string',
+          enum: ['Audio', 'Decal', 'Model', 'Animation', 'Video'],
+          description: 'Type of asset to upload. Must match the file format.'
+        },
+        displayName: {
+          type: 'string',
+          description: 'Display name for the asset (max 50 characters)'
+        },
+        description: {
+          type: 'string',
+          description: 'Description for the asset (default: empty string)'
+        },
+        userId: {
+          type: 'string',
+          description: 'Roblox user ID for the asset creator. Overrides ROBLOX_CREATOR_USER_ID env var.'
+        },
+        groupId: {
+          type: 'string',
+          description: 'Roblox group ID for the asset creator. Overrides ROBLOX_CREATOR_GROUP_ID env var. Takes precedence over userId if both provided.'
+        }
+      },
+      required: ['filePath', 'assetType', 'displayName']
+    }
+  },
+  {
     name: 'capture_screenshot',
     category: 'read',
     description: 'Capture a screenshot of the Roblox Studio viewport and return it as a PNG image. Requires EditableImage API to be enabled: Game Settings > Security > "Allow Mesh / Image APIs". Only works in Edit mode with the viewport visible.',

@@ -72,8 +72,10 @@ export interface ThumbnailResponse {
   imageUrl?: string;
 }
 
+export type AssetType = 'Audio' | 'Decal' | 'Model' | 'Animation' | 'Video';
+
 export interface AssetUploadRequest {
-  assetType: 'Decal' | 'Audio' | 'Model';
+  assetType: AssetType;
   displayName: string;
   description: string;
   creationContext: {
@@ -297,14 +299,32 @@ export class OpenCloudClient {
   private getMimeType(fileName: string): string {
     const ext = fileName.split('.').pop()?.toLowerCase();
     const mimeTypes: Record<string, string> = {
+      // Image (Decal)
       png: 'image/png',
       jpg: 'image/jpeg',
       jpeg: 'image/jpeg',
       bmp: 'image/bmp',
-      tga: 'image/x-tga',
+      tga: 'image/tga',
+      // Audio
+      mp3: 'audio/mpeg',
+      ogg: 'audio/ogg',
+      wav: 'audio/wav',
+      flac: 'audio/flac',
+      // Model
+      fbx: 'model/fbx',
+      gltf: 'model/gltf+json',
+      glb: 'model/gltf-binary',
+      rbxm: 'model/x-rbxm',
+      rbxmx: 'model/x-rbxm',
+      // Video
+      mp4: 'video/mp4',
+      mov: 'video/mov',
     };
     if (!ext || !mimeTypes[ext]) {
-      throw new Error(`Unsupported image format: ${fileName}. Supported: PNG, JPG, BMP, TGA`);
+      throw new Error(
+        `Unsupported file format: .${ext ?? '(none)'}. Supported: ` +
+        'Image: png/jpg/bmp/tga, Audio: mp3/ogg/wav/flac, Model: fbx/gltf/glb/rbxm/rbxmx, Video: mp4/mov'
+      );
     }
     return mimeTypes[ext];
   }

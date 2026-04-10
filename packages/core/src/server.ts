@@ -210,6 +210,8 @@ export class RobloxStudioMCPServer {
             return await this.tools.previewAsset((args as any)?.assetId as number, (args as any)?.includeProperties, (args as any)?.maxDepth);
           case 'upload_decal':
             return await this.tools.uploadDecal((args as any)?.filePath as string, (args as any)?.displayName as string, (args as any)?.description, (args as any)?.userId, (args as any)?.groupId);
+          case 'upload_asset':
+            return await this.tools.uploadAsset((args as any)?.filePath as string, (args as any)?.assetType as string, (args as any)?.displayName as string, (args as any)?.description, (args as any)?.userId, (args as any)?.groupId);
           case 'clone_object':
             return await this.tools.cloneObject((args as any)?.instancePath as string, (args as any)?.targetParentPath as string);
           case 'move_object':
