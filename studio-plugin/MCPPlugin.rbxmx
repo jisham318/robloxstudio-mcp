@@ -83,9 +83,11 @@ local routeMap = {
 	["/api/compare-instances"] = QueryHandlers.compareInstances,
 	["/api/get-output-log"] = QueryHandlers.getOutputLog,
 	["/api/set-property"] = PropertyHandlers.setProperty,
+	["/api/set-properties"] = PropertyHandlers.setProperties,
 	["/api/mass-set-property"] = PropertyHandlers.massSetProperty,
 	["/api/mass-get-property"] = PropertyHandlers.massGetProperty,
 	["/api/create-object"] = InstanceHandlers.createObject,
+	["/api/create-ui-tree"] = InstanceHandlers.createUITree,
 	["/api/mass-create-objects"] = InstanceHandlers.massCreateObjects,
 	["/api/delete-object"] = InstanceHandlers.deleteObject,
 	["/api/smart-duplicate"] = InstanceHandlers.smartDuplicate,
@@ -2181,6 +2183,101 @@ local function moveObject(requestData)
 		error = `Failed to move object: {result}`,
 	}
 end
+local function createUITree(requestData)
+	local tree = requestData.tree
+	local parentPath = requestData.parentPath
+	if not tree or not (parentPath ~= "" and parentPath) then
+		return {
+			error = "Tree object and parentPath are required",
+		}
+	end
+	local parent = getInstanceByPath(parentPath)
+	if not parent then
+		return {
+			error = `Parent not found: {parentPath}`,
+		}
+	end
+	local _value = tree.className
+	local _condition = not (_value ~= 0 and _value == _value and _value ~= "" and _value)
+	if not _condition then
+		local _className = tree.className
+		_condition = not (type(_className) == "string")
+	end
+	if _condition then
+		return {
+			error = "Tree root must have a className string",
+		}
+	end
+	local MAX_DEPTH = 20
+	local recordingId = beginRecording("Create UI tree")
+	local totalCreated = 0
+	local totalFailed = 0
+	local errors = {}
+	local function createNode(nodeData, nodeParent, depth)
+		if depth > MAX_DEPTH then
+			totalFailed += 1
+			local _arg0 = `Max depth ({MAX_DEPTH}) exceeded`
+			table.insert(errors, _arg0)
+			return nil
+		end
+		local className = nodeData.className
+		if not (className ~= "" and className) then
+			totalFailed += 1
+			table.insert(errors, "Node missing className")
+			return nil
+		end
+		local success, instance = pcall(function()
+			local inst = Instance.new(className)
+			local _value_1 = nodeData.name
+			if _value_1 ~= 0 and _value_1 == _value_1 and _value_1 ~= "" and _value_1 then
+				inst.Name = nodeData.name
+			end
+			local props = nodeData.properties
+			if props and type(props) == "table" then
+				for propName, propValue in pairs(props) do
+					pcall(function()
+						local converted = convertPropertyValue(inst, propName, propValue)
+						inst[propName] = if converted ~= nil then converted else propValue
+					end)
+				end
+			end
+			inst.Parent = nodeParent
+			return inst
+		end)
+		if not success or not instance then
+			totalFailed += 1
+			local _arg0 = `Failed to create {className}: {tostring(instance)}`
+			table.insert(errors, _arg0)
+			return nil
+		end
+		totalCreated += 1
+		local children = nodeData.children
+		if children and type(children) == "table" then
+			for _, childData in children do
+				if type(childData) == "table" then
+					createNode(childData, instance, depth + 1)
+				end
+			end
+		end
+		return instance
+	end
+	local rootInstance = createNode(tree, parent, 0)
+	finishRecording(recordingId, totalCreated > 0)
+	if not rootInstance then
+		return {
+			error = `Failed to create root node ({tree.className})`,
+			totalCreated = totalCreated,
+			totalFailed = totalFailed,
+			errors = errors,
+		}
+	end
+	return {
+		totalCreated = totalCreated,
+		totalFailed = totalFailed,
+		rootPath = getInstancePath(rootInstance),
+		errors = if #errors > 0 then errors else nil,
+	}
+end
 return {
 	createObject = createObject,
 	deleteObject = deleteObject,
@@ -2189,6 +2286,7 @@ return {
 	massDuplicate = massDuplicate,
 	cloneObject = cloneObject,
 	moveObject = moveObject,
+	createUITree = createUITree,
 }
 ]]></string>
           </Properties>
@@ -2984,10 +3082,77 @@ local function massGetProperty(requestData)
 		propertyName = propertyName,
 	}
 end
+local function setProperties(requestData)
+	local instancePath = requestData.instancePath
+	local properties = requestData.properties
+	if not (instancePath ~= "" and instancePath) or not properties or not (type(properties) == "table") then
+		return {
+			error = "Instance path and properties object are required",
+		}
+	end
+	local instance = getInstanceByPath(instancePath)
+	if not instance then
+		return {
+			error = `Instance not found: {instancePath}`,
+		}
+	end
+	local recordingId = beginRecording("Set multiple properties")
+	local inst = instance
+	local results = {}
+	local successCount = 0
+	local failureCount = 0
+	for propName, propValue in pairs(properties) do
+		local success, err = pcall(function()
+			if propName == "Parent" or propName == "PrimaryPart" then
+				if type(propValue) == "string" then
+					local refInstance = getInstanceByPath(propValue)
+					if not refInstance then
+						error(`{propName} reference not found: {propValue}`)
+					end
+					inst[propName] = refInstance
+				end
+			elseif propName == "Name" then
+				instance.Name = tostring(propValue)
+			elseif propName == "Source" and instance:IsA("LuaSourceContainer") then
+				instance.Source = tostring(propValue)
+			else
+				local converted = convertPropertyValue(instance, propName, propValue)
+				inst[propName] = if converted ~= nil then converted else propValue
+			end
+		end)
+		if success then
+			successCount += 1
+			local _arg0 = {
+				property = propName,
+				success = true,
+			}
+			table.insert(results, _arg0)
+		else
+			failureCount += 1
+			local _arg0 = {
+				property = propName,
+				success = false,
+				error = tostring(err),
+			}
+			table.insert(results, _arg0)
+		end
+	end
+	finishRecording(recordingId, successCount > 0)
+	return {
+		instancePath = instancePath,
+		summary = {
+			total = successCount + failureCount,
+			succeeded = successCount,
+			failed = failureCount,
+		},
+		results = results,
+	}
+end
 return {
 	setProperty = setProperty,
 	massSetProperty = massSetProperty,
 	massGetProperty = massGetProperty,
+	setProperties = setProperties,
 }
 ]]></string>
           </Properties>
@@ -4164,6 +4329,11 @@ local function getScriptSource(requestData)
 		if instance:IsA("BaseScript") then
 			resp.enabled = instance.Enabled
 		end
+		local topServiceInst = instance
+		while topServiceInst.Parent and topServiceInst.Parent ~= game do
+			topServiceInst = topServiceInst.Parent
+		end
+		resp.topService = topServiceInst.Name
 		return resp
 	end)
 	if success then
@@ -4259,11 +4429,11 @@ local function setScriptSource(requestData)
 		error = `Failed to set script source. UpdateSourceAsync failed: {updateResult}. Direct assignment failed: {directResult}. Replace method failed: {replaceResult}`,
 	}
 end
-local escapeLuaPattern, escapeLuaReplacement
 local function editScriptLines(requestData)
 	local instancePath = requestData.instancePath
 	local oldString = requestData.old_string
 	local newString = requestData.new_string
+	local startLine = requestData.startLine
 	if not (instancePath ~= "" and instancePath) or oldString == nil or newString == nil then
 		return {
 			error = "Instance path, old_string, and new_string are required",
@@ -4285,31 +4455,55 @@ local function editScriptLines(requestData)
 	local recordingId = beginRecording(`Edit script: {instance.Name}`)
 	local success, result = pcall(function()
 		local source = readScriptSource(instance)
-		-- Count occurrences to ensure uniqueness
-		local count = 0
-		local searchPos = 1
 		local searchLen = #oldString
-		while true do
-			local foundStart = string.find(source, oldString, searchPos, true)
-			if foundStart == nil then
-				break
+		local matchStart
+		if startLine ~= nil then
+			if startLine < 1 then
+				error(`startLine must be >= 1 (got {startLine})`)
 			end
-			count += 1
+			local lineStartByte = 1
+			local currentLine = 1
+			while currentLine < startLine do
+				local nlPos = string.find(source, "\n", lineStartByte, true)
+				if nlPos == nil then
+					error(`startLine {startLine} is past end of script ({currentLine} lines)`)
+				end
+				lineStartByte = nlPos + 1
+				currentLine += 1
+			end
+			local candidate = string.sub(source, lineStartByte, lineStartByte + searchLen - 1)
+			if candidate ~= oldString then
+				error(`old_string does not match at line {startLine}. Use get_script_source to verify the exact text at that line.`)
+			end
+			matchStart = lineStartByte
+		else
+			local count = 0
+			local searchPos = 1
+			local firstMatch
+			while true do
+				local foundStart = string.find(source, oldString, searchPos, true)
+				if foundStart == nil then
+					break
+				end
+				if firstMatch == nil then
+					firstMatch = foundStart
+				end
+				count += 1
+				if count > 1 then
+					break
+				end
+				searchPos = foundStart + searchLen
+			end
+			if count == 0 then
+				error("old_string not found in script. If old_string contains repeated patterns (e.g. closing braces), pass startLine to anchor the edit.")
+			end
 			if count > 1 then
-				break
+				error("old_string matches multiple locations. Provide more surrounding context, or pass startLine to anchor the edit to a specific line.")
 			end
-			searchPos = foundStart + searchLen
+			matchStart = firstMatch
 		end
-		if count == 0 then
-			error("old_string not found in script")
-		end
-		if count > 1 then
-			error("old_string matches multiple locations. Provide more surrounding context to make it unique")
-		end
-		-- Perform the replacement (plain literal find + replace)
-		local escaped = escapeLuaPattern(oldString)
-		local escapedRepl = escapeLuaReplacement(newString)
-		local newSource = string.gsub(source, escaped, escapedRepl, 1)
+		-- Byte-slice replacement avoids Lua pattern escaping (safe for multi-byte chars like em dashes).
+		local newSource = string.sub(source, 1, matchStart - 1) .. newString .. string.sub(source, matchStart + searchLen)
 		ScriptEditorService:UpdateSourceAsync(instance, function()
 			return newSource
 		end)
@@ -4507,10 +4701,10 @@ local function deleteScriptLines(requestData)
 		error = `Failed to delete script lines: {result}`,
 	}
 end
-function escapeLuaPattern(s)
+local function escapeLuaPattern(s)
 	return (string.gsub(s, "([%(%)%.%%%+%-%*%?%[%]%^%$])", "%%%1"))
 end
-function escapeLuaReplacement(s)
+local function escapeLuaReplacement(s)
 	return (string.gsub(s, "%%", "%%%%"))
 end
 local function caseInsensitiveLiteralReplace(src, searchStr, repl)
@@ -5103,7 +5297,7 @@ return {
         <Properties>
           <string name="Name">State</string>
           <string name="Source"><![CDATA[-- Compiled with roblox-ts v3.0.0
-local CURRENT_VERSION = "2.6.0-next.8"
+local CURRENT_VERSION = "2.7.0-next.2"
 local MAX_CONNECTIONS = 5
 local BASE_PORT = 58741
 local activeTabIndex = 0

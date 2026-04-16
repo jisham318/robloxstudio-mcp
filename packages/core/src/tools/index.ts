@@ -457,11 +457,13 @@ export class RobloxStudioTools {
   }
 
 
-  async editScriptLines(instancePath: string, oldString: string, newString: string) {
+  async editScriptLines(instancePath: string, oldString: string, newString: string, startLine?: number) {
     if (!instancePath || typeof oldString !== 'string' || typeof newString !== 'string') {
       throw new Error('Instance path, old_string, and new_string are required for edit_script_lines');
     }
-    const response = await this.client.request('/api/edit-script-lines', { instancePath, old_string: oldString, new_string: newString });
+    const payload: Record<string, unknown> = { instancePath, old_string: oldString, new_string: newString };
+    if (startLine !== undefined) payload.startLine = startLine;
+    const response = await this.client.request('/api/edit-script-lines', payload);
     return {
       content: [
         {
@@ -1472,6 +1474,20 @@ export class RobloxStudioTools {
     };
   }
 
+  private async resolveImageId(decalAssetId: string): Promise<string> {
+    try {
+      const resp = await fetch(
+        `https://economy.roblox.com/v2/assets/${decalAssetId}/details`
+      );
+      if (!resp.ok) return decalAssetId;
+      const details = await resp.json() as { TextureId?: number };
+      if (details.TextureId) return String(details.TextureId);
+    } catch {
+      // fall through
+    }
+    return decalAssetId;
+  }
+
   async uploadDecal(
     filePath: string,
     displayName: string,
@@ -1485,6 +1501,42 @@ export class RobloxStudioTools {
 
     const fileContent = fs.readFileSync(filePath);
     const fileName = path.basename(filePath);
+
+    const resolvedGroupId = groupId || process.env.ROBLOX_CREATOR_GROUP_ID;
+    const resolvedUserId = userId || process.env.ROBLOX_CREATOR_USER_ID;
+
+    if (this.openCloudClient.hasApiKey() && (resolvedUserId || resolvedGroupId)) {
+      const creator: { userId?: string; groupId?: string } = {};
+      if (resolvedGroupId) {
+        creator.groupId = resolvedGroupId;
+      } else {
+        creator.userId = resolvedUserId;
+      }
+
+      const result = await this.openCloudClient.createAsset(
+        {
+          assetType: 'Decal',
+          displayName,
+          description: description || '',
+          creationContext: { creator },
+        },
+        fileContent,
+        fileName
+      );
+
+      const decalId = result.response?.assetId;
+      const imageId = decalId ? await this.resolveImageId(decalId) : undefined;
+
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            ...result,
+            imageId,
+          })
+        }]
+      };
+    }
 
     if (this.cookieClient.hasCookie()) {
       const result = await this.cookieClient.uploadDecal(
@@ -1502,51 +1554,16 @@ export class RobloxStudioTools {
               displayName,
               assetType: 'Decal',
               backingAssetId: String(result.backingAssetId),
+              imageId: String(result.backingAssetId),
             },
           })
         }]
       };
     }
 
-    if (!this.openCloudClient.hasApiKey()) {
-      throw new Error(
-        'No auth configured for asset upload. Set ROBLOSECURITY env var (recommended) or ROBLOX_OPEN_CLOUD_API_KEY.'
-      );
-    }
-
-    const resolvedGroupId = groupId || process.env.ROBLOX_CREATOR_GROUP_ID;
-    const resolvedUserId = userId || process.env.ROBLOX_CREATOR_USER_ID;
-
-    if (!resolvedUserId && !resolvedGroupId) {
-      throw new Error(
-        'Creator identity required for Open Cloud upload. Set ROBLOX_CREATOR_USER_ID or ROBLOX_CREATOR_GROUP_ID, or pass userId/groupId as parameters. Alternatively, set ROBLOSECURITY to use cookie auth instead.'
-      );
-    }
-
-    const creator: { userId?: string; groupId?: string } = {};
-    if (resolvedGroupId) {
-      creator.groupId = resolvedGroupId;
-    } else {
-      creator.userId = resolvedUserId;
-    }
-
-    const result = await this.openCloudClient.createAsset(
-      {
-        assetType: 'Decal',
-        displayName,
-        description: description || '',
-        creationContext: { creator },
-      },
-      fileContent,
-      fileName
+    throw new Error(
+      'No auth configured for asset upload. Set ROBLOX_OPEN_CLOUD_API_KEY + ROBLOX_CREATOR_USER_ID (recommended) or ROBLOSECURITY env var.'
     );
-
-    return {
-      content: [{
-        type: 'text',
-        text: JSON.stringify(result)
-      }]
-    };
   }
 
   async uploadAsset(

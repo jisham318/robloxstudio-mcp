@@ -203,6 +203,7 @@ function editScriptLines(requestData: Record<string, unknown>) {
 	const instancePath = requestData.instancePath as string;
 	let oldString = requestData.old_string as string;
 	let newString = requestData.new_string as string;
+	const startLine = requestData.startLine as number | undefined;
 
 	if (!instancePath || oldString === undefined || newString === undefined) {
 		return { error: "Instance path, old_string, and new_string are required" };
@@ -221,27 +222,47 @@ function editScriptLines(requestData: Record<string, unknown>) {
 
 	const [success, result] = pcall(() => {
 		const source = readScriptSource(instance);
-
-		// Count occurrences to ensure uniqueness
-		let count = 0;
-		let searchPos = 1;
 		const searchLen = oldString.size();
+		let matchStart: number;
 
-		while (true) {
-			const [foundStart] = string.find(source, oldString, searchPos, true);
-			if (foundStart === undefined) break;
-			count++;
-			if (count > 1) break;
-			searchPos = foundStart + searchLen;
+		if (startLine !== undefined) {
+			if (startLine < 1) error(`startLine must be >= 1 (got ${startLine})`);
+
+			let lineStartByte = 1;
+			let currentLine = 1;
+			while (currentLine < startLine) {
+				const [nlPos] = string.find(source, "\n", lineStartByte, true);
+				if (nlPos === undefined) {
+					error(`startLine ${startLine} is past end of script (${currentLine} lines)`);
+				}
+				lineStartByte = (nlPos as number) + 1;
+				currentLine++;
+			}
+
+			const candidate = string.sub(source, lineStartByte, lineStartByte + searchLen - 1);
+			if (candidate !== oldString) {
+				error(`old_string does not match at line ${startLine}. Use get_script_source to verify the exact text at that line.`);
+			}
+			matchStart = lineStartByte;
+		} else {
+			let count = 0;
+			let searchPos = 1;
+			let firstMatch: number | undefined;
+			while (true) {
+				const [foundStart] = string.find(source, oldString, searchPos, true);
+				if (foundStart === undefined) break;
+				if (firstMatch === undefined) firstMatch = foundStart;
+				count++;
+				if (count > 1) break;
+				searchPos = foundStart + searchLen;
+			}
+			if (count === 0) error("old_string not found in script. If old_string contains repeated patterns (e.g. closing braces), pass startLine to anchor the edit.");
+			if (count > 1) error("old_string matches multiple locations. Provide more surrounding context, or pass startLine to anchor the edit to a specific line.");
+			matchStart = firstMatch as number;
 		}
 
-		if (count === 0) error("old_string not found in script");
-		if (count > 1) error("old_string matches multiple locations. Provide more surrounding context to make it unique");
-
-		// Perform the replacement (plain literal find + replace)
-		const escaped = escapeLuaPattern(oldString);
-		const escapedRepl = escapeLuaReplacement(newString);
-		const [newSource] = string.gsub(source, escaped, escapedRepl, 1);
+		// Byte-slice replacement avoids Lua pattern escaping (safe for multi-byte chars like em dashes).
+		const newSource = string.sub(source, 1, matchStart - 1) + newString + string.sub(source, matchStart + searchLen);
 
 		ScriptEditorService.UpdateSourceAsync(instance, () => newSource);
 

@@ -547,7 +547,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: 'edit_script_lines',
     category: 'write',
-    description: 'Replace exact text in a script. old_string must match exactly once in the script (whitespace-sensitive). Use get_script_source first to see current content.',
+    description: 'Replace exact text in a script. Without startLine, old_string must match exactly once in the script. Pass startLine (1-indexed, from get_script_source) to anchor the edit to a specific line when old_string is ambiguous (e.g. repeated closing braces).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -557,11 +557,15 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         },
         old_string: {
           type: 'string',
-          description: 'Exact text to find and replace (must be unique in the script)'
+          description: 'Exact text to find and replace. Must be unique in the script unless startLine is provided.'
         },
         new_string: {
           type: 'string',
           description: 'Replacement text'
+        },
+        startLine: {
+          type: 'number',
+          description: 'Optional 1-indexed line where old_string begins. When provided, skips uniqueness check and requires old_string to match starting at that exact line.'
         }
       },
       required: ['instancePath', 'old_string', 'new_string']
