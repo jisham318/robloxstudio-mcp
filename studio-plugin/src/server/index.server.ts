@@ -7,8 +7,8 @@ UI.init(plugin);
 const elements = UI.getElements();
 
 
-const toolbar = plugin.CreateToolbar("MCP Integration");
-const button = toolbar.CreateButton("MCP Server", "Connect to MCP Server for AI Integration", "rbxassetid://10734944444");
+const toolbar = plugin.CreateToolbar("__TOOLBAR_NAME__");
+const button = toolbar.CreateButton("__BUTTON_TITLE__", "__BUTTON_TOOLTIP__", "rbxassetid://__BUTTON_ICON_ID__");
 
 
 elements.connectButton.Activated.Connect(() => {

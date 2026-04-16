@@ -14,14 +14,47 @@ const serverDir = join(outDir, 'server');
 const modulesDir = join(outDir, 'modules');
 const includeDir = join(pluginDir, 'include');
 const nodeModulesRbxtsDir = join(pluginDir, 'node_modules', '@rbxts');
-const outputPath = join(pluginDir, 'MCPPlugin.rbxmx');
+
+const VARIANTS = {
+  main: {
+    scriptName: 'MCPPlugin',
+    outputName: 'MCPPlugin.rbxmx',
+    toolbarName: 'MCP Integration',
+    buttonTitle: 'MCP Server',
+    buttonTooltip: 'Connect to MCP Server for AI Integration',
+    buttonIconId: '10734944444',
+  },
+  inspector: {
+    scriptName: 'MCPInspectorPlugin',
+    outputName: 'MCPInspectorPlugin.rbxmx',
+    toolbarName: 'MCP Inspector',
+    buttonTitle: 'MCP Inspector',
+    buttonTooltip: 'Connect to MCP Inspector (read-only) for AI Integration',
+    buttonIconId: '125921838360800',
+  },
+};
+
+const variantArgIdx = process.argv.indexOf('--variant');
+const variantName = variantArgIdx !== -1 ? process.argv[variantArgIdx + 1] : 'main';
+const variant = VARIANTS[variantName];
+if (!variant) {
+  console.error(`Unknown variant "${variantName}". Available: ${Object.keys(VARIANTS).join(', ')}`);
+  process.exit(1);
+}
+
+const outputPath = join(pluginDir, variant.outputName);
 
 function escapeCdata(source) {
   return source.replace(/\]\]>/g, ']]]]><![CDATA[>');
 }
 
 function injectVersion(source) {
-  return source.replace(/__VERSION__/g, VERSION);
+  return source
+    .replace(/__VERSION__/g, VERSION)
+    .replace(/__TOOLBAR_NAME__/g, variant.toolbarName)
+    .replace(/__BUTTON_TITLE__/g, variant.buttonTitle)
+    .replace(/__BUTTON_TOOLTIP__/g, variant.buttonTooltip)
+    .replace(/__BUTTON_ICON_ID__/g, variant.buttonIconId);
 }
 
 const serverInitPath = join(serverDir, 'init.server.luau');
@@ -136,7 +169,7 @@ const rbxmx = `<?xml version="1.0" encoding="utf-8"?>
 <roblox version="4">
   <Item class="Script" referent="0">
     <Properties>
-      <string name="Name">MCPPlugin</string>
+      <string name="Name">${variant.scriptName}</string>
       <token name="RunContext">0</token>
       <string name="Source"><![CDATA[${escapeCdata(mainSource)}]]></string>
     </Properties>
@@ -168,14 +201,14 @@ writeFileSync(outputPath, rbxmx, 'utf8');
 const moduleCount = countModules(modulesDir);
 const includeCount = countModules(includeDir);
 const rbxtsCount = countModules(nodeModulesRbxtsDir);
-console.log(`Built studio-plugin/MCPPlugin.rbxmx (${moduleCount} modules${includeCount > 0 ? `, ${includeCount} runtime includes` : ''}${rbxtsCount > 0 ? `, ${rbxtsCount} @rbxts packages` : ''})`);
+console.log(`Built studio-plugin/${variant.outputName} (${moduleCount} modules${includeCount > 0 ? `, ${includeCount} runtime includes` : ''}${rbxtsCount > 0 ? `, ${rbxtsCount} @rbxts packages` : ''})`);
 
 const pluginsDir = process.platform === 'win32'
   ? join(process.env.LOCALAPPDATA || join(homedir(), 'AppData', 'Local'), 'Roblox', 'Plugins')
   : join(homedir(), 'Documents', 'Roblox', 'Plugins');
 if (existsSync(pluginsDir)) {
   try {
-    const installPath = join(pluginsDir, 'MCPPlugin.rbxmx');
+    const installPath = join(pluginsDir, variant.outputName);
     copyFileSync(outputPath, installPath);
     console.log(`Installed to ${installPath}`);
   } catch (err) {
