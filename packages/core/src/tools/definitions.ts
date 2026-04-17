@@ -1343,7 +1343,7 @@ part(0,2,0,2,1,1,"b")`,
   {
     name: 'upload_decal',
     category: 'write',
-    description: 'Upload an image file as a Decal asset to Roblox. Supports ROBLOSECURITY cookie auth (recommended, simpler) or ROBLOX_OPEN_CLOUD_API_KEY (needs asset:write scope + creator ID). Cookie auth is used automatically when ROBLOSECURITY is set.',
+    description: 'Upload an image file as a Decal asset to Roblox. Supports ROBLOSECURITY cookie auth (recommended, simpler) or ROBLOX_OPEN_CLOUD_API_KEY (needs asset:write scope + creator ID). Cookie auth is used automatically when ROBLOSECURITY is set. Response includes both decalId (Decal wrapper asset ID) and imageId (underlying image content ID — use this for ImageLabel.Image). For Open Cloud uploads, imageId is resolved via the connected Studio plugin (InsertService:LoadAsset); if the plugin is not connected, imageId is null.',
     inputSchema: {
       type: 'object',
       properties: {

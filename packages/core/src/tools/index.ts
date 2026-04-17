@@ -1474,18 +1474,29 @@ export class RobloxStudioTools {
     };
   }
 
-  private async resolveImageId(decalAssetId: string): Promise<string> {
+  // Decal asset IDs are the wrapper asset; ImageLabel.Image needs the underlying image
+  // content ID. The only reliable cross-auth way to resolve this is InsertService:LoadAsset
+  // via the connected Studio plugin — the unauthenticated economy endpoint returns 401.
+  private async resolveImageId(decalAssetId: string): Promise<string | null> {
+    const code = `
+      local InsertService = game:GetService("InsertService")
+      local ok, result = pcall(function() return InsertService:LoadAsset(${decalAssetId}) end)
+      if not ok then return nil end
+      local decal = result:FindFirstChildWhichIsA("Decal", true)
+      local id = decal and decal.Texture:match("(%d+)") or nil
+      result:Destroy()
+      return id
+    `;
     try {
-      const resp = await fetch(
-        `https://economy.roblox.com/v2/assets/${decalAssetId}/details`
-      );
-      if (!resp.ok) return decalAssetId;
-      const details = await resp.json() as { TextureId?: number };
-      if (details.TextureId) return String(details.TextureId);
+      const response = await this.client.request('/api/execute-luau', { code }, 'edit') as { returnValue?: unknown };
+      const returnValue = response?.returnValue;
+      if (returnValue !== undefined && returnValue !== null && /^\d+$/.test(String(returnValue))) {
+        return String(returnValue);
+      }
     } catch {
-      // fall through
+      // plugin not connected or luau execution failed
     }
-    return decalAssetId;
+    return null;
   }
 
   async uploadDecal(
@@ -1525,13 +1536,14 @@ export class RobloxStudioTools {
       );
 
       const decalId = result.response?.assetId;
-      const imageId = decalId ? await this.resolveImageId(decalId) : undefined;
+      const imageId = decalId ? await this.resolveImageId(decalId) : null;
 
       return {
         content: [{
           type: 'text',
           text: JSON.stringify({
             ...result,
+            decalId: decalId ?? null,
             imageId,
           })
         }]
@@ -1553,7 +1565,7 @@ export class RobloxStudioTools {
               assetId: String(result.assetId),
               displayName,
               assetType: 'Decal',
-              backingAssetId: String(result.backingAssetId),
+              decalId: String(result.assetId),
               imageId: String(result.backingAssetId),
             },
           })
@@ -1592,7 +1604,8 @@ export class RobloxStudioTools {
               assetId: String(result.assetId),
               displayName,
               assetType,
-              backingAssetId: String(result.backingAssetId),
+              decalId: String(result.assetId),
+              imageId: String(result.backingAssetId),
             },
           })
         }]
@@ -1634,6 +1647,22 @@ export class RobloxStudioTools {
       fileContent,
       fileName
     );
+
+    // Decals: also resolve the underlying image content ID for ImageLabel.Image usage.
+    if (assetType === 'Decal') {
+      const decalId = result.response?.assetId;
+      const imageId = decalId ? await this.resolveImageId(decalId) : null;
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            ...result,
+            decalId: decalId ?? null,
+            imageId,
+          })
+        }]
+      };
+    }
 
     return {
       content: [{
